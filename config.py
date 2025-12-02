@@ -3,6 +3,7 @@
 import matplotlib.pyplot as plt
 from GazeOptimizer.patient_functions.patient import *
 
+from itertools import cycle
 import h5py
 import pickle
 
@@ -23,6 +24,16 @@ CMAP = plt.cm.viridis
 EPS = 2
 
 TWO_BEAMS=False
+
+COLORS = [
+    ("#e41a1c", "red"),
+    ("#ff7f00", "orange"),
+    ("#f781bf", "pink"),
+    ("#000000", "black"),
+]
+COLORS = [c[0] for c in COLORS]
+# If you only need a list of hex values:
+HIGHLIGHT_COLORS = cycle(COLORS)
 
 
 pat = Patient(patient_id=PATIENT_ID, h5_file_path=H5_FILE_PATH)

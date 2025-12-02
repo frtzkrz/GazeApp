@@ -18,7 +18,9 @@ app = dash.Dash(__name__)
 
 app.layout = html.Div([
 
-    dcc.Store(id="clicked-points-store", data={}),
+    dcc.Store(id="filters", data={}),
+    dcc.Store(id="last-click", data=[None for _ in ROI_NAMES]),
+    dcc.Store(id="highlight-plans", data={}),
 
     html.Div(
         id="plots-container",
@@ -32,7 +34,7 @@ app.layout = html.Div([
             html.Div([
                 dcc.Graph(
                     id={"type": "roi-plot", "index": i},
-                    figure=make_dvh_figure(roi, plans=ALL_PLANS)
+                    figure=make_dvh_figure(roi, plans=ALL_PLANS, highlight_plans=[])
                 ),
                 html.Button(
                     "Clear Filter",
@@ -57,12 +59,16 @@ app.layout = html.Div([
 # Update figures and filter store
 @app.callback(
     Output({"type": "roi-plot", "index": ALL}, "figure"),
-    Output("clicked-points-store", "data"),
+    Output("filters", "data"),
+    Output("last-click", "data"),
+    Output("highlight-plans", "data"),
     Input({"type": "roi-plot", "index": ALL}, "clickData"),
     Input({"type": "clear-button", "index": ALL}, "n_clicks"),
     Input({"type": "dose-metric-slider", "index": ALL}, "clickData"), #replace clickData 
     Input({"type": "volume-metric-slider", "index": ALL}, "clickData"), #replace clickData
-    State("clicked-points-store", "data"),
+    State("filters", "data"),
+    State("last-click", "data"),
+    State("highlight-plans", "data"),
 )
 
 def update(
@@ -71,37 +77,52 @@ def update(
     dose_slider,
     volume_slider,
     filter_dict,
-):
-    filter_dict = filter_dict or {}
+    last_click,
+    highlight_plan_keys,
+):  
     ctx = callback_context
-    
+    highlight_point = None
+
     #avoid doing stuff when first loading page
     if not ctx.triggered:
-        fig = update_figures(plans=ALL_PLANS)
-        return fig, filter_dict
+        fig = update_figures(plans=ALL_PLANS, highlight_plans=[])
+        return fig, filter_dict, last_click, highlight_plan_keys
     
-    #check if click on plots triggered callback
-    if ctx.triggered_id['type'] == 'roi-plot': 
-        filter_dict = add_filter(filter_dict=filter_dict, filter_clicks=filter_clicks)
+    #extract Roi Name and Point Data
+    roi = ROI_NAMES[ctx.triggered_id['index']]
+    
+    #create filter store
+    filter_dict = filter_dict or {}
     
     #check if click on "Clear Filter"
-    if ctx.triggered_id['type'] == 'clear-button': 
-        roi = ROI_NAMES[ctx.triggered_id['index']]
+    if ctx.triggered_id['type'] == 'clear-button':
         filter_dict = delete_filter(filter_dict=filter_dict, roi=roi)
+    
+    #check if click on plots triggered callback
+    if ctx.triggered_id['type'] == 'roi-plot':
+        point = get_new_click(last_click=last_click, this_click=filter_clicks)["points"][0]
+        if "x" in point: filter_dict = add_filter(filter_dict=filter_dict, point=point, roi=roi)
+        elif "r" in point:
+            highlight_point = point
+            
+    
+    #update plans
     new_plans = filter_plans(filter_dict=filter_dict, plans=ALL_PLANS)
+
+    if highlight_point is not None:
+        add_highlight(highlight_plan_keys=highlight_plan_keys, point=highlight_point)
+
+    highlight_plans = {plan: highlight_plan_keys[plan.angle_key] for plan in ALL_PLANS if plan.angle_key in highlight_plan_keys}
+    #display message if no plans left
     if len(new_plans) == 0:
         pass
-    fig = update_figures(plans=new_plans)
+
+    #update figures and add markers from filter_dict
+    fig = update_figures(plans=new_plans, highlight_plans=highlight_plans)
     fig = add_filter_marker(fig=fig, filter_dict=filter_dict)
+    #print(highlight_plan_keys)
+    return fig, filter_dict, filter_clicks, highlight_plan_keys
 
-
-    #store_data[ROI_NAMES[i]] = {'dose': x, 'volume': y}
-
-
-    #print(roi, which_plot)
-    return fig, filter_dict
-    #return fig, filter_dict
-    #return fig, filter_dict#figure
 
 # ============================================================
 # RUN SERVER
