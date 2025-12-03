@@ -179,16 +179,20 @@ def make_dvh_figure(roi, plans, highlight_plans, metric=None, all_plans=ALL_PLAN
         if plan in old_plans:
             plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"color": "grey"}, opacity=0.1)
 
-        #plot highlighted plans
-        elif plan in highlight_plans:
-            dash = 'dot' if plan in old_plans else None
-            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"width": 3, "color": highlight_plans[plan], "dash": dash})
-        
+
         #plot remaining plans according to metric
-        else:
+        elif plan not in highlight_plans:
             color = get_line_color(value, values=values, colorscale=colorscale)
             plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"color": color}, opacity=0.7)
 
+
+    #plot highlighted plans
+    if len(highlight_plans) > 0:
+        _, highlight_values = make_colorscale(plans=highlight_plans, roi=roi, metric=metric)
+        for plan, value in zip(highlight_plans, values):    
+            dash = 'dot' if plan in old_plans else None
+            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"width": 3, "color": highlight_plans[plan], "dash": dash})
+        
     if metric is not None:
         plot_metric(subplot=fig, metric=metric)
 

@@ -171,7 +171,7 @@ def update(
     if highlight_point is not None:
         add_highlight(highlight_plan_keys=highlight_plan_keys, point=highlight_point)
 
-    highlight_plans = {plan: highlight_plan_keys[plan.angle_key] for plan in ALL_PLANS if plan.angle_key in highlight_plan_keys}
+    highlight_plans = {plan: highlight_plan_keys[plan.angle_key] for plan in ALL_PLANS if plan.angle_key in highlight_plan_keys and not plan.angle_key_2}
     #display message if no plans left
     if len(new_plans) == 0:
         print("No Plans left")
