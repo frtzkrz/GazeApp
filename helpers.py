@@ -69,8 +69,16 @@ def get_line_color(value, values, colorscale):
 
 
 def plot_dvh(subplot, roi, plan, value, metric, line_args={"width": 2}, opacity=1.):
-    metric_str = "AUC: " if metric is None else f"{metric.metric_type}{metric.metric_value}: "
+    if plan.angle_key_2:
+        w = np.round(plan.beam_weight, 1)
+        metric_str = f"{w}*{plan.angle_key}° + {1-w}*{plan.angle_key_2}°<br>"
+    
+    else:
+        metric_str = f"{plan.angle_key}°<br>"
+    metric_str += "<br>"
+    metric_str += "AUC: " if metric is None else f"{metric.metric_type}{metric.metric_value}: "
     metric_str += str(np.round(value, 1))
+    hoverinfo = "skip" if opacity < 0.5 else "all"
 
     dvh = plan.dvhs[roi]
     subplot.add_trace(
@@ -80,17 +88,18 @@ def plot_dvh(subplot, roi, plan, value, metric, line_args={"width": 2}, opacity=
             mode="lines",
             line=line_args,
             opacity=opacity,
+            hoverinfo=hoverinfo,
             hovertemplate=
                 'D: %{x:.1f}<br>' +
                 'V: %{y:.1f}<br>' +
-                f'Angle: {plan.angle_key}<br>' +
-                metric_str
+                metric_str,
+            
         ),
         row=1, col=1
     )
 
 def plot_scatter(subplot, plans, colors, metric=None, colorscale=None, opacity=1., showscale=False):
-    angle_keys = [plan.angle_key for plan in plans]
+    angle_keys = [plan.angle_key for plan in plans if not plan.angle_key_2]
     polars, thetas = get_angles_from_keys(angle_keys=angle_keys, azimuthal_as_radian=False)
     title = 'Area under DVH' if metric is None else metric.name
     subplot.add_trace(
@@ -168,7 +177,7 @@ def make_dvh_figure(roi, plans, highlight_plans, metric=None, all_plans=ALL_PLAN
 
         #Plot old plans in grey
         if plan in old_plans:
-            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"color": "grey"}, opacity=0.3)
+            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"color": "grey"}, opacity=0.1)
 
         #plot highlighted plans
         elif plan in highlight_plans:
@@ -178,10 +187,12 @@ def make_dvh_figure(roi, plans, highlight_plans, metric=None, all_plans=ALL_PLAN
         #plot remaining plans according to metric
         else:
             color = get_line_color(value, values=values, colorscale=colorscale)
-            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"color": color}, opacity=0.5)
+            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"color": color}, opacity=0.7)
 
     if metric is not None:
         plot_metric(subplot=fig, metric=metric)
+
+    
 
     #circle highlighted gaze angles
     highlight_scatter(subplot=fig, highlight_plans=highlight_plans)
@@ -295,3 +306,4 @@ def add_filter_from_metric(metrics, max_vals, filter_dict):
             else:
                 filter_dict[roi] = {'dose': metric.metric_value, 'volume': float(max_val)}
     return filter_dict
+

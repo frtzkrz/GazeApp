@@ -9,7 +9,7 @@ import h5py
 import pickle
 
 PATIENT_ID = 'P23336'
-H5_FILE_PATH = f'data/{PATIENT_ID}/{PATIENT_ID}_delta_15.h5'
+H5_FILE_PATH = f'data/{PATIENT_ID}/{PATIENT_ID}_9_angles.h5'
 
 PICKLE_PATH = f"data/pickles/{PATIENT_ID}_9_combo.dat"
 
@@ -34,9 +34,9 @@ ESPENSEN_METRICS = {
 FIGSIZE_X = 950
 FIGSIZE_Y = 420
 CMAP = plt.cm.viridis
-EPS = 2
+EPS = 0.5
 
-TWO_BEAMS=False
+TWO_BEAMS=True
 
 COLORS = [
     ("#e41a1c", "red"),
@@ -49,17 +49,18 @@ COLORS = [c[0] for c in COLORS]
 HIGHLIGHT_COLORS = cycle(COLORS)
 
 
-pat = Patient(patient_id=PATIENT_ID, h5_file_path=H5_FILE_PATH)
-with h5py.File(pat.h5_file_path, "r") as h5_file:
-    PLANS_1_BEAM = [TreatmentPlan(pat, angle_key=angle_key, dose=h5_file[angle_key][:]) for angle_key in pat.gaze_angle_keys]
+PATIENT = Patient(patient_id=PATIENT_ID, h5_file_path=H5_FILE_PATH)
+with h5py.File(PATIENT.h5_file_path, "r") as h5_file:
+    PLANS_1_BEAM = [TreatmentPlan(PATIENT, angle_key=angle_key, dose=h5_file[angle_key][:]) for angle_key in PATIENT.gaze_angle_keys]
 
 def load_data():
     try:
         with open(PICKLE_PATH) as f:
-            weights, plans_2_beam = pickle.load(f)
+            plans_2_beam = pickle.load(f)
+        print("loaded")
     except:
-        weights, plans_2_beam = [], []
-    return weights, plans_2_beam
+        plans_2_beam = []
+    return plans_2_beam
 
 def save_data(data):
     with open(PICKLE_PATH, "wb") as f:
@@ -68,11 +69,48 @@ def save_data(data):
 
 
 
+
+def find_all_gaze_combos(n_steps=3):
+    print("Calculating Combos")
+    plans = []
+    with h5py.File(PATIENT.h5_file_path, "r") as h5_file:
+        for i, gaze_angle_key_1 in enumerate(PATIENT.gaze_angle_keys):
+
+            #Load dose 1
+            dose_1 = h5_file[gaze_angle_key_1][:]
+
+            #Add single beam dose
+            plans.append(TreatmentPlan(
+                patient=PATIENT, 
+                angle_key=gaze_angle_key_1, 
+                dose=dose_1)
+            )
+            
+            
+            for gaze_angle_key_2 in PATIENT.gaze_angle_keys[i+1:]:
+                dose_2 = h5_file[gaze_angle_key_2][:]
+
+                #add all two beam plans
+                for w in np.linspace(0, 1, n_steps, endpoint=False)[1:]:
+                    combined_dose = w*dose_1 + (1-w)*dose_2
+                    p = TreatmentPlan(
+                        patient=PATIENT,
+                        angle_key=gaze_angle_key_1,
+                        angle_key_2=gaze_angle_key_2,
+                        dose=combined_dose,
+                        beam_weight=w
+                    )
+                    plans.append(p)
+    print("Finished")
+    print(len(plans))
+    return plans
+
 if TWO_BEAMS: 
-    weights, plans_2_beam = load_data()
-    if weights == []:
-        weights, _, plans_2_beam = calculate_gaze_combos(patient=pat)
-        save_data([weights, plans_2_beam])
+    plans_2_beam = load_data()
+    if plans_2_beam == []:
+        plans_2_beam = find_all_gaze_combos(n_steps=10)
+        save_data(plans_2_beam)
+    ALL_PLANS = plans_2_beam
 
 
-ALL_PLANS = PLANS_1_BEAM
+else: ALL_PLANS = PLANS_1_BEAM
