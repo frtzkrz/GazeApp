@@ -3,6 +3,7 @@ from GazeOptimizer.patient_functions.helpers import get_angle_from_key, get_angl
 from GazeOptimizer.patient_functions.patient import Metric
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+import matplotlib.cm as cm
 
 
 # ============================================================
@@ -11,32 +12,66 @@ from plotly.subplots import make_subplots
 
 def get_new_click(last_click, this_click):
     for last, this in zip(last_click, this_click):
-        #print(f"this: {this}, last: {last}")
         if this is None: 
             continue
         elif this == last: 
             continue
         else: return this
 
-
-
-def get_colors(plans, roi, metric):
+def make_colorscale(plans, roi, metric, n_colors=256):
+    """
+    Create a Plotly colorscale based on the range of `values` using the Viridis colormap.
+    Returns a list usable as `colorscale` in Plotly.
+    """
     if metric is None:
-        aucs = [plan.dvhs[roi].get_dvh_auc() for plan in plans]
-        norm = mpl.colors.Normalize(vmin=min(aucs), vmax=max(aucs))
-        normalized_aucs = norm(aucs)
-        colors = [f"rgb{tuple(int(255*c) for c in CMAP(auc)[:3])}" for auc in normalized_aucs]
+        values = [plan.dvhs[roi].get_dvh_auc() for plan in plans]
+
+    elif metric.metric_type in ['D', 'V']:
+        values = [plan.dvhs[roi].get_metric_value(metric) for plan in plans]
+    
+    else: print('Metric Invalid')
+
+    vmin, vmax = np.min(values), np.max(values)
+    cmap = cm.get_cmap("viridis", n_colors)
+
+    colorscale = []
+    for i in range(n_colors):
+        # normalized position (0–1) in the colorscale
+        frac = i / (n_colors - 1)
+
+        # get RGBA from matplotlib colormap
+        r, g, b, _ = cmap(frac)
+
+        # convert to rgb string
+        color_str = f"rgb({int(r*255)}, {int(g*255)}, {int(b*255)})"
+
+        colorscale.append([frac, color_str])
+    return colorscale, values
+
+def get_line_color(value, values, colorscale):
+    """
+    Return the exact color corresponding to `value`
+    based on the colorscale created from `values`.
+    Assumes `value` is one of the original values.
+    """
+    values = np.array(values, dtype=float)
+    vmin, vmax = values.min(), values.max()
+
+    # normalize value to 0–1 exactly the same way as Plotly
+    frac = (value - vmin) / (vmax - vmin)
+
+    # find the closest matching entry in the colorscale
+    # because colorscale is defined on uniform 0–1 steps
+    positions = np.array([p for p, _ in colorscale])
+    idx = np.argmin(np.abs(positions - frac))
+
+    return colorscale[idx][1]
 
 
-    else:
-        metrics = [plan.dvhs[roi].get_metric_value(metric) for plan in plans]
-        norm = mpl.colors.Normalize(vmin=min(metrics), vmax=max(metrics))
-        normalized_metrics = norm(aucs)
-        colors = [f"rgb{tuple(int(255*c) for c in CMAP(metric)[:3])}" for metric in normalized_metrics]
+def plot_dvh(subplot, roi, plan, value, metric, line_args={"width": 2}, opacity=1.):
+    metric_str = "AUC: " if metric is None else f"{metric.metric_type}{metric.metric_value}: "
+    metric_str += str(np.round(value, 1))
 
-    return colors
-
-def plot_dvh(subplot, roi, plan, line_args={"width": 2}, opacity=1.):
     dvh = plan.dvhs[roi]
     subplot.add_trace(
         go.Scatter(
@@ -48,16 +83,16 @@ def plot_dvh(subplot, roi, plan, line_args={"width": 2}, opacity=1.):
             hovertemplate=
                 'D: %{x:.1f}<br>' +
                 'V: %{y:.1f}<br>' +
-                f'{plan.angle_key}'
+                f'Angle: {plan.angle_key}<br>' +
+                metric_str
         ),
         row=1, col=1
     )
 
-def plot_scatter(subplot, plans, colors, opacity=1.):
+def plot_scatter(subplot, plans, colors, metric=None, colorscale=None, opacity=1., showscale=False):
     angle_keys = [plan.angle_key for plan in plans]
     polars, thetas = get_angles_from_keys(angle_keys=angle_keys, azimuthal_as_radian=False)
-    
-
+    title = 'Area under DVH' if metric is None else metric.name
     subplot.add_trace(
         go.Scatterpolar(
             theta=thetas,
@@ -66,12 +101,11 @@ def plot_scatter(subplot, plans, colors, opacity=1.):
             marker=dict(
                 size=15,
                 color=colors,
-                colorscale='Viridis',
-                colorbar=dict(title='Area under DVH'),
-                opacity=opacity,
-                showscale=True
+                colorscale=colorscale,
+                colorbar=dict(title=title),
+                showscale=showscale,
+                opacity=opacity
             )
-            
         ),
         row=1, col=2
     )
@@ -91,8 +125,29 @@ def highlight_scatter(subplot, highlight_plans):
                 line=dict(width=3),
                 color=colors
             ),
-        )
+        ),
+        row=1, col=2
     )
+
+def plot_metric(subplot, metric):
+    if metric.metric_type == 'D':
+        subplot.add_hline(
+            y=metric.metric_value,
+            line=dict(color='grey', width=2, dash='dash'),
+            opacity=0.5,
+            row=1, col=1
+        ),
+        
+        
+    elif metric.metric_type == 'V':
+        subplot.add_vline(
+            x=metric.metric_value,
+            line=dict(color='grey', width=2, dash='dash'),
+            opacity=0.5,
+            row=1, col=1
+        ),
+
+    
 
 def make_dvh_figure(roi, plans, highlight_plans, metric=None, all_plans=ALL_PLANS):
     fig = make_subplots(
@@ -101,29 +156,41 @@ def make_dvh_figure(roi, plans, highlight_plans, metric=None, all_plans=ALL_PLAN
         column_widths=[0.75, 0.25],
         subplot_titles=[ "DVH", "Gaze Angle"]
     )
-    colors = get_colors(plans=plans, roi=roi, metric=metric)
+    
+    if len(plans) > 0:
+        colorscale, values = make_colorscale(plans=plans, roi=roi, metric=metric)
+    _, all_values = make_colorscale(plans=all_plans, roi=roi, metric=metric)
 
     old_plans = get_old_plans(plans=plans, all_plans=all_plans)
 
     #Plot old plans in grey
-    for plan in old_plans:
-        plot_dvh(subplot=fig, roi=roi, plan=plan, line_args={"color": "grey"}, opacity=0.3)
+    for plan, value in zip(all_plans, all_values):
 
-    #Plot remaining plans in color
-    for plan, color in zip(plans, colors):
-        plot_dvh(subplot=fig, roi=roi, plan=plan, line_args={"color": color}, opacity=0.5)
+        #Plot old plans in grey
+        if plan in old_plans:
+            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"color": "grey"}, opacity=0.3)
 
-    #Plot highlighted plans in contrasting colors
-    for plan in highlight_plans:
-        dash = 'dot' if plan in old_plans else None
-        plot_dvh(subplot=fig, roi=roi, plan=plan, line_args={"width": 3, "color": highlight_plans[plan], "dash": dash})
+        #plot highlighted plans
+        elif plan in highlight_plans:
+            dash = 'dot' if plan in old_plans else None
+            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"width": 3, "color": highlight_plans[plan], "dash": dash})
+        
+        #plot remaining plans according to metric
+        else:
+            color = get_line_color(value, values=values, colorscale=colorscale)
+            plot_dvh(subplot=fig, roi=roi, plan=plan, value=value, metric=metric, line_args={"color": color}, opacity=0.5)
 
-    #Plot gaze angles
-    plot_scatter(subplot=fig, plans=plans, colors=colors)
-    plot_scatter(subplot=fig, plans=old_plans, colors=["grey"]*len(old_plans), opacity=0.3)
+    if metric is not None:
+        plot_metric(subplot=fig, metric=metric)
 
     #circle highlighted gaze angles
     highlight_scatter(subplot=fig, highlight_plans=highlight_plans)
+
+    #Plot gaze angles
+    plot_scatter(subplot=fig, plans=old_plans, colors=["grey"]*len(old_plans), opacity=0.3)
+    if len(plans) > 0:
+        plot_scatter(subplot=fig, plans=plans, metric=metric, colorscale=colorscale, colors=values, showscale=True)
+    
 
     fig.update_layout(
         title=roi,
@@ -161,10 +228,10 @@ def update_after_filter_click(filter_dict, roi, dvh_point):
     return filter_dict
 
 
-def update_figures(plans, highlight_plans):    
+def update_figures(plans, metrics, highlight_plans):    
     return [
-        make_dvh_figure(roi=roi, plans=plans, highlight_plans=highlight_plans)
-        for roi in ROI_NAMES
+        make_dvh_figure(roi=roi, plans=plans, metric=metrics[i], highlight_plans=highlight_plans)
+        for i, roi in enumerate(ROI_NAMES)
     ]
 
 def filter_plans(filter_dict, plans=ALL_PLANS):
@@ -208,4 +275,23 @@ def find_plan_with_angles(polar, theta):
         plan_polar, plan_theta = get_angle_from_key(plan.angle_key, azimuthal_as_radian=False)
         if (plan_polar, plan_theta) == (polar, theta):
             return plan
-     
+
+
+def construct_metrics(metric_type_vals, metric_value_vals):
+    metrics = []
+    for roi, m_type, m_value in zip(ROI_NAMES, metric_type_vals, metric_value_vals):
+        metrics.append(Metric(roi=roi, metric_type=m_type, metric_value=float(m_value)) if m_type in ["D", "V"] else None)
+    return metrics
+
+def no_message():
+    n = len(ROI_NAMES)
+    [""]*n, [{"display": "none"}]*n
+
+def add_filter_from_metric(metrics, max_vals, filter_dict):
+    for metric, max_val, roi in zip(metrics, max_vals, ROI_NAMES):
+        if max_val:
+            if metric.metric_type == 'D':
+                filter_dict[roi] = {'dose': float(max_val), 'volume': metric.metric_value}
+            else:
+                filter_dict[roi] = {'dose': metric.metric_value, 'volume': float(max_val)}
+    return filter_dict

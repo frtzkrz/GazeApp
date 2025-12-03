@@ -9,11 +9,15 @@ import seaborn as sns
 from GazeOptimizer.patient_functions.helpers import cumulative_dvh, print_progress_bar
 
 class Metric:
-    def __init__(self, metric_str): #D20_Macula
-        self.name = metric_str
-        what, self.roi = metric_str.split('_')  #split into D20 and Macula
-        self.metric_type = what[0]  #D
-        self.value = int(what[1:])  #20
+    def __init__(self, roi, metric_type, metric_value): #D20_Macula
+
+        self.name = f"{metric_type}{metric_value}_{roi}"
+        self.roi_name = roi
+        self.metric_type = metric_type
+        self.metric_value = metric_value
+    
+    def __str__(self):
+        return self.name
 
 class Weight:
     def __init__(self, metric: Metric, value: float):
@@ -24,8 +28,12 @@ class Weight:
         return f'{self.metric.name}: {self.weight}'
 
 class Weights:
-    def __init__(self, weights_dict):
-        self.weights = [Weight(Metric(metric_str), weight) for metric_str, weight in weights_dict.items()]
+    def __init__(self, weights_dict): #{'D2_Macula': 3, 'D20_OpticalDisc': 3, 'D20_Cornea': 1, 'V55_Retina':1, 'V27_CiliaryBody': 1, 'D5_Lens': 1}
+        self.weights = []
+        for w in weights_dict:
+            what, where = w.split('_')
+            t, v = what[0], int(what[1:])
+            self.weights.append(Weight(Metric(roi=where, metric_type=t, metric_value=v), weights_dict[w]))
     
     def __str__(self):
         return ', '.join([f'{weight.metric.name}: {weight.value}' for weight in self.weights])
@@ -235,8 +243,8 @@ class DVH:
             raise ValueError(f"Metric ROI '{metric.roi_name}' does not match DVH ROI '{self.roi_name}'")
 
         if metric.metric_type == 'D':
-            return self.get_dose_at_volume(metric.value)
-        else: return self.get_volume_at_dose(metric.value)
+            return self.get_dose_at_volume(metric.metric_value)
+        else: return self.get_volume_at_dose(metric.metric_value)
 
 class Patient:
     def __init__(

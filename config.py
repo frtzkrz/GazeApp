@@ -1,6 +1,7 @@
 #SET UP
 
 import matplotlib.pyplot as plt
+
 from GazeOptimizer.patient_functions.patient import *
 
 from itertools import cycle
@@ -16,6 +17,18 @@ ROI_NAMES = ['Cornea', 'CiliaryBody', 'Iris', 'Lens', 'Macula', 'OpticalDisc', '
 N_PLOTS = len(ROI_NAMES)
 
 N_POINTS = 100 #points on dvh plots
+
+ESPENSEN_METRICS = {
+    "Cornea": ("D", 20, None),
+    "CiliaryBody": ("V", 27, None),
+    "Iris": (None, None, None),
+    "Lens": ("D", 5, None),
+    "Macula": ("D", 2, None),
+    "OpticalDisc": ("D", 20, None),
+    "Retina": ("V", 55, None),
+    "OpticalNerve": (None, None, None),
+}
+
 
 #Plotting stuff
 FIGSIZE_X = 950
