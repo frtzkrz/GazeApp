@@ -28,8 +28,6 @@ class Patient:
 
         self.filters: dict[str, Filter] = {}
 
-        self.metrics: dict[str, Metric] = {}
-
         self.trace_uids = {}
         
     
@@ -86,33 +84,22 @@ class Patient:
                         self.plans_two_beam.append(plan)
         
 
-        self.plans = self.plans_single_beam.copy()
         
-        if two_beam: self.plans += self.plans_two_beam
-    
+        
+        if two_beam: self.plans = self.plans_two_beam + self.plans_single_beam
+        else: self.plans = self.plans_single_beam
+
         self.active_plans=self.plans.copy()
 
-        self.metrics = {}
 
-    def apply_filters(self) -> None: #Only to be called when new filter is added
-        self.active_plans = [p for p in self.plans if p.apply_filters(filters=self.filters)]
-        self.passive_plans = [p for p in self.plans if p not in self.active_plans]
 
-    def add_filter(self, f: Filter) -> None:
-
-        self.filters[f.metric.roi] = f
-
-        #recalculate active and passive plans
-        self.apply_filters()
-    
-    def remove_filter(self, roi: str) -> None:
-        if roi in self.filters:
-
-            del self.filters[roi]
-
-            #recalculate active and passive plans
-            self.apply_filters()
-    
     def apply_metric(self, metric: Metric) -> None:
         [plan.apply_metric(metric=metric) for plan in self.plans]
-    
+
+
+    def get_plan_uid_from_angles(self, angles) -> int:
+        for plan in self.plans:
+            if not plan.two_beam:
+                if plan.polar_1 == angles[0] and plan.theta_1 == angles[1]:
+                    return self.trace_uids[plan.uid]
+        else: return 0

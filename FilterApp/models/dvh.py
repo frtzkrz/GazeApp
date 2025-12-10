@@ -31,8 +31,13 @@ class DVH:
 
         self.color = None
 
+        self.hover_info = self._set_hover_info()
 
 
+    def _set_hover_info(self) -> str:
+        hover_info = self.metric_title if self.metric_title is not None else "AUC"
+        self.hover_info = f"{hover_info}: {np.round(self.metric_value, 1)}"
+        return self.hover_info
     
     
     def _compute_dvh(
@@ -115,21 +120,31 @@ class DVH:
         return np.trapezoid(y=self.volume, x=self.dose)
 
     def get_dose_at_volume(self, volume) -> float:
+        if volume >=100:
+            volume = 99
+        elif volume <=0:
+            volume = 1
         return self.dose_at_integer_volumes[int(volume)]
 
     def get_volume_at_dose(self, dose) -> float:
+        if dose >= 60:
+            dose = 59
+        elif dose <= 0:
+            dose = 1
+            
         return self.volume_at_integer_dose[int(dose)]
     
-    def get_metric(self, metric: Metric) -> float:
-        if metric.metric_type == 'D':
-            return self.get_dose_at_volume(metric.metric_value)
+    def update_metric(self, metric) -> float:
+        metric_type, metric_value = metric["type"], metric["value"]
+        self.metric_title=f"{metric_type}_{metric_value}" if metric_type else "AUC"
+
+        if metric_type == 'D':
+            self.metric_value = self.get_dose_at_volume(metric_value)
+        elif metric_type == 'V':
+            self.metric_value = self.get_volume_at_dose(dose=metric_value)
         else:
-            return self.get_volume_at_dose(dose=metric.metric_value)
+            self.metric_value = self.auc
 
-    def set_metric_value(self, metric: Metric) -> float:
-        self.metric_value = self.get_metric(metric=metric)
+        self._set_hover_info()
+
         return self.metric_value
-
-
-    #def plot(self) -> _scatter.Scatter
-    

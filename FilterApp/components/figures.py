@@ -5,7 +5,7 @@ from models.plan import Plan
 from . import roi_figure
 from utils.config import *
 from . import ids
-from components.figures_helpers import update_active_plans
+from components.figures_helpers import update_active_plans, update_dvh_metrics, update_highlights
 
 def create_figure(app: Dash, patient: Patient) -> html.Div:
     """
@@ -17,9 +17,8 @@ def create_figure(app: Dash, patient: Patient) -> html.Div:
     res = html.Div(
         children=[
             dcc.Store(id=ids.FILTERS, data={}),
-            dcc.Store(id=ids.METRICS, data={roi: {"type": None, "value": None} for roi in ROI_NAMES}),
-            dcc.Store(id=ids.ACTIVE_PLANS_CHANGED, data=False),
-            dcc.Store(id=ids.METRICS_CHANGED, data=False),
+            dcc.Store(id=ids.METRICS, data=ESPENSEN_METRICS),
+            dcc.Store(id=ids.HIGHLIGHT_IDXS, data={}),
             html.Div(
                 className="figures",
                 children=[
@@ -75,7 +74,7 @@ def render(app: Dash, patient: Patient) -> html.Div:
         return all_filters 
     
 
-    # adjust metrics when any metric changes
+    #adjust metrics when any metric changes
     @app.callback(
         Output(component_id=ids.METRICS, component_property="data"),
         Input(component_id={"type": ids.METRIC, "index": ALL}, component_property="data"),
@@ -83,8 +82,21 @@ def render(app: Dash, patient: Patient) -> html.Div:
     )
     def update_metrics(roi_metrics, all_metrics) -> dict[str, dict[str, int | str | None]]:
         all_metrics = {roi: metric for m_dict in roi_metrics for roi, metric in m_dict.items()}
-        return all_metrics 
-    
+        update_dvh_metrics(patient=patient, all_metrics=all_metrics)
+        return all_metrics
     
 
+    #Handle clicks on scatterplot to highlight plans
+    @app.callback(
+        Output(component_id=ids.HIGHLIGHT_IDXS, component_property="data"),
+        Output(component_id={"type": ids.GAZE_SCATTER_PLOT, "index": ALL}, component_property="clickData"),
+        Input(component_id={"type": ids.GAZE_SCATTER_PLOT, "index": ALL}, component_property="clickData"),
+        State(component_id=ids.HIGHLIGHT_IDXS, component_property="data"),
+        prevent_initial_callback=True,
+    )
+    def register_highlight(clicks, highlight_idxs) -> tuple[dict[str, str], list]:
+        return update_highlights(patient=patient, clicks=clicks, highlight_idxs=highlight_idxs), [None for _ in ROI_NAMES]
+    
+    
+    update_dvh_metrics(patient=patient, all_metrics=STARTING_METRICS)
     return create_figure(app=app, patient=patient)

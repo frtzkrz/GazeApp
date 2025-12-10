@@ -11,7 +11,7 @@ from components import gaze_scatter, dvh_plot
 from models.patient import Patient
 from models.metric import Metric
 
-from components.roi_figure_helpers import update_filters, update_after_filters_change, update_after_metrics_change, update_metrics
+from components.roi_figure_helpers import update_filters, update_metrics
 
 def render(app: Dash, patient: Patient, roi: str) -> html.Div:
 
@@ -59,49 +59,8 @@ def render(app: Dash, patient: Patient, roi: str) -> html.Div:
             metric_max=metric_max
         )
 
-    
-    @app.callback(
-        Output(component_id={"type": ids.DVH_PLOT, "index": roi}, component_property="figure"),
-        #Output(component_id={"type": ids.GAZE_SCATTER_PLOT, "index": roi}, component_property="figure"),
-        Input(component_id=ids.FILTERS, component_property="data"),
-        Input(component_id=ids.METRICS, component_property="data"),
-        prevent_initial_callback=False
-    )
-    #Update plans and colors
-    def update_figures(all_filters: dict[str, list[int]], all_metrics: dict[str, dict]) -> Patch:
-        
-        ctx = callback_context
-        trigger = ctx.triggered_id
-        patch = Patch()
-        if trigger == ids.FILTERS:
-            update_after_filters_change(
-                patch=patch,    
-                patient=patient, 
-                roi=roi, 
-                all_filters=all_filters, 
-                all_metrics=all_metrics
-                )
-    
-
-            return patch
-        
-        elif trigger == ids.METRICS:
-            update_after_metrics_change(
-                patch=patch, 
-                patient=patient, 
-                roi=roi, 
-                all_filters=all_filters, 
-                all_metrics=all_metrics
-            )
-
-            return patch
-
-        return patch
-        
-
-
-    scatter_graph, colors = gaze_scatter.render(app=app, patient=patient, roi=roi)
-    dvh_graph = dvh_plot.render(app=app, patient=patient, roi=roi, colors=colors) # type: ignore
+    scatter_graph = gaze_scatter.render(app=app, patient=patient, roi=roi)
+    dvh_graph = dvh_plot.render(app=app, patient=patient, roi=roi) # type: ignore
 
     return html.Div(
         className="roi-figure",

@@ -11,13 +11,12 @@ from dash.dependencies import Input, Output, State, MATCH, ALL
 import plotly.graph_objs as go
 
 
-
 def main() -> None:
     #load patient and plans
     patient = load_data(
         path=H5_PATH, 
         patient_id=PATIENT_ID, 
-        two_beam=True, 
+        two_beam=TWO_BEAMS, 
         n_weights=N_WEIGHTS
     )
 
