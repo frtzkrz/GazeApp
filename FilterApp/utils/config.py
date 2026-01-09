@@ -5,15 +5,15 @@ from itertools import cycle
 ################################################
 #-----------------------------------------------
 #Probably you want to change these parameters:
-#PATIENT_ID = "P23336"
+PATIENT_ID = "P23336"
 #PATIENT_ID = "23129"
-PATIENT_ID = "17213"
+#PATIENT_ID = "17213"
 
 H5_PATH = Path(f"data/{PATIENT_ID}_9_angles.h5")
 
 N_WEIGHTS = 10
 
-TWO_BEAMS = False
+TWO_BEAMS = True
 
 #-----------------------------------------------
 ################################################
